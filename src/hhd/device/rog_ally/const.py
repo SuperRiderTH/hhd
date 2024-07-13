@@ -57,6 +57,12 @@ PAD_VIEW = 0x11
 PAD_MENU = 0x12
 PAD_XBOX = 0x13
 
+CALIBRATE_PACKET_LENGTH_JOYSTICK = 14
+CALIBRATE_PACKET_LENGTH_TRIGGER = 6
+
+CALIBRATE_DATA_LENGTH_JOYSTICK = 6
+CALIBRATE_DATA_LENGTH_TRIGGER = 2
+
 
 MODE_GAME = buf([FEATURE_KBD_REPORT_ID, 0xD1, xpad_cmd_set_mode, 0x01, xpad_mode_game])
 
@@ -1097,9 +1103,9 @@ COMMIT_RESET = lambda kconf: [
             xpad_cmd_set_js_dz,
             0x04,  # Length
             kconf.get("ls_min", 0x00),  # Left Inner
-            kconf.get("ls_max", 0x40),  # Left Outer
+            kconf.get("ls_max", 0x64),  # Left Outer
             kconf.get("rs_min", 0x00),  # Right Inner
-            kconf.get("rs_max", 0x40),  # Right Outer
+            kconf.get("rs_max", 0x64),  # Right Outer
         ]
     ),
     buf(
@@ -1109,12 +1115,192 @@ COMMIT_RESET = lambda kconf: [
             xpad_cmd_set_tr_dz,
             0x04,  # Length
             kconf.get("lt_min", 0x00),  # Left Inner
-            kconf.get("lt_max", 0x40),  # Left Outer
+            kconf.get("lt_max", 0x64),  # Left Outer
             kconf.get("rt_min", 0x00),  # Right Inner
-            kconf.get("rt_max", 0x40),  # Right Outer
+            kconf.get("rt_max", 0x64),  # Right Outer
         ]
     ),
 ]
+
+
+# Here for testing
+def generate_calibration_joystick(y_stable, y_min, y_max, x_stable, x_min, x_max):
+    print(f"joystick.")
+
+    buffer = bytearray( b'\x00' * (CALIBRATE_DATA_LENGTH_JOYSTICK * 2 + 1) )
+    print(len(buffer))
+    print(buffer.hex())
+    checksum = 0
+
+    calibrations = []
+     
+    calibrations.append(y_stable)
+    calibrations.append(y_min)
+    calibrations.append(y_max)
+    calibrations.append(x_stable)
+    calibrations.append(x_min)
+    calibrations.append(x_max)
+
+    offset = 0
+
+    for i in range(CALIBRATE_DATA_LENGTH_JOYSTICK):
+        cal = calibrations[i]
+        #print("cal")
+
+        byte_upper = (cal & 0xFF00) >> 8
+        buffer[offset] = byte_upper
+        #print(f"{byte_upper}")
+        #print(buffer.hex())
+
+        byte_lower = cal & 0xFF
+        buffer[offset + 1] = byte_lower
+        #print(f"{byte_lower}")
+        #print(buffer.hex())
+
+        offset += 2
+
+    checksum = sum(buffer) % 256
+    buffer[CALIBRATE_DATA_LENGTH_JOYSTICK * 2] = checksum
+    
+    return bytes(buffer)
+
+def generate_calibration_trigger(x_stable, x_max):
+    print(f"trigger.")
+
+    buffer = bytearray( b'\x00' * (CALIBRATE_DATA_LENGTH_TRIGGER * 2 + 1) )
+    checksum = 0
+
+    calibrations = []
+     
+    calibrations.append(x_stable)
+    calibrations.append(x_max)
+
+    offset = 0
+
+    for i in range(CALIBRATE_DATA_LENGTH_TRIGGER):
+        cal = calibrations[i]
+        #print("cal")
+
+        byte_upper = (cal & 0xFF00) >> 8
+        buffer[offset] = byte_upper
+        #print(f"{byte_upper}")
+        #print(buffer.hex())
+
+        byte_lower = cal & 0xFF
+        buffer[offset + 1] = byte_lower
+        #print(f"{byte_lower}")
+        #print(buffer.hex())
+
+        offset += 2
+
+    checksum = sum(buffer) % 256
+    buffer[CALIBRATE_DATA_LENGTH_TRIGGER * 2] = checksum
+    
+    return bytes(buffer)
+
+CALIBRATE_JOYSTICK_XY_LEFT = buf(
+    [
+        FEATURE_KBD_REPORT_ID,
+        0xD1,
+        xpad_cmd_set_calibration,
+        CALIBRATE_PACKET_LENGTH_JOYSTICK,
+        0x01, # Set Command
+        xpad_axis_xy_left,
+        *generate_calibration_joystick( 2000, 1500, 2500, 2000, 1500, 2500, ),
+    ]
+)
+
+CALIBRATE_JOYSTICK_XY_RIGHT = buf(
+    [
+        FEATURE_KBD_REPORT_ID,
+        0xD1,
+        xpad_cmd_set_calibration,
+        CALIBRATE_PACKET_LENGTH_JOYSTICK,
+        0x01, # Set Command
+        xpad_axis_xy_right,
+        *generate_calibration_joystick( 2000, 1000, 2500, 2000, 1000, 2500, ),
+    ]
+)
+
+CALIBRATE_JOYSTICK_Z_LEFT = buf(
+    [
+        FEATURE_KBD_REPORT_ID,
+        0xD1,
+        xpad_cmd_set_calibration,
+        CALIBRATE_PACKET_LENGTH_TRIGGER,
+        0x01, # Set Command
+        xpad_axis_z_left,
+        *generate_calibration_trigger( 2000, 3000 )
+    ]
+)
+
+CALIBRATE_JOYSTICK_Z_RIGHT = buf(
+    [
+        FEATURE_KBD_REPORT_ID,
+        0xD1,
+        xpad_cmd_set_calibration,
+        CALIBRATE_PACKET_LENGTH_TRIGGER, # Packet Length
+        0x01, # Set Command
+        xpad_axis_z_right,
+        *generate_calibration_trigger( 2000, 3000 )
+    ]
+)
+
+
+CALIBRATE_JOYSTICK_RESET_XY_LEFT = buf(
+    [
+        FEATURE_KBD_REPORT_ID,
+        0xD1,
+        xpad_cmd_set_calibration,
+        0x02, # Packet Length
+        0x02, # Reset Command
+        xpad_axis_xy_left,
+    ]
+)
+
+CALIBRATE_JOYSTICK_RESET_XY_RIGHT = buf(
+    [
+        FEATURE_KBD_REPORT_ID,
+        0xD1,
+        xpad_cmd_set_calibration,
+        0x02, # Packet Length
+        0x02, # Reset Command
+        xpad_axis_xy_right,
+    ]
+)
+
+CALIBRATE_JOYSTICK_RESET_Z_LEFT = buf(
+    [
+        FEATURE_KBD_REPORT_ID,
+        0xD1,
+        xpad_cmd_set_calibration,
+        0x02, # Packet Length
+        0x02, # Reset Command
+        xpad_axis_z_left,
+    ]
+)
+
+CALIBRATE_JOYSTICK_RESET_Z_RIGHT = buf(
+    [
+        0x5A, # FEATURE_KBD_REPORT_ID
+        0xD1,
+        xpad_cmd_set_calibration,
+        0x02, # Packet Length
+        0x02, # Reset Command
+        xpad_axis_z_right,
+    ]
+)
+
+CALIBRATE_JOYSTICK_SET = buf(
+    [
+        # End Calibration
+        FEATURE_KBD_REPORT_ID,
+        0xD1,
+        xpad_cmd_set_calibration,
+        0x01, # Length
+        0x03, # Set
+    ]
+)
 
 COMMANDS_GAME = lambda kconf: [
     MODE_GAME,
@@ -1137,6 +1323,7 @@ COMMANDS_GAME = lambda kconf: [
     FLUSH_BUFFER,
     REMAP_TRIGGERS,
     *COMMIT_RESET(kconf),
+    *COMMANDS_CALIBRATION_TEST,
 ]
 
 COMMANDS_MOUSE = lambda kconf: [
@@ -1160,6 +1347,33 @@ COMMANDS_MOUSE = lambda kconf: [
     FLUSH_BUFFER,
     REMAP_TRIGGERS_MOUSE,
     *COMMIT_RESET(kconf),
+    *COMMANDS_CALIBRATION_RESET,
+]
+
+COMMANDS_CALIBRATION_RESET = [
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_RESET_XY_LEFT,
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_RESET_XY_RIGHT,
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_RESET_Z_LEFT,
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_RESET_Z_RIGHT,
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_SET,
+]
+
+COMMANDS_CALIBRATION_TEST = [
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_XY_LEFT,
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_XY_RIGHT,
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_Z_LEFT,
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_Z_RIGHT,
+    FLUSH_BUFFER,
+    CALIBRATE_JOYSTICK_SET,
 ]
 
 RGB_APPLY = buf([FEATURE_KBD_REPORT_ID, 0xB4])
